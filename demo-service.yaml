@@ -1,0 +1,116 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: demo-service
+  annotations:
+    description: Deploy the Hello Service.
+    tags: demo-service
+objects:
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    labels:
+      app: demo-service
+    name: demo-service
+    namespace: helios
+  spec:
+    replicas: 1
+    selector:
+      app: demo-service
+      deploymentconfig: demo-service
+    strategy:
+      activeDeadlineSeconds: 21600
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: demo-service
+          deploymentconfig: demo-service
+      spec:
+        containers:
+          - name: demo-service
+            image: demo/demo-service:alpine
+            imagePullPolicy: IfNotPresent
+            resources: {}
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+    test: false
+  triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+          - demo-service
+        from:
+          kind: ImageStreamTag
+          name: demo/demo-service:alpine
+          namespace: helios
+      type: ImageChange
+- kind: Service
+  apiVersion: v1
+  metadata:
+    labels:
+      app: demo-service
+      type: integration
+    name: demo-service
+    namespace: helios
+  spec:
+    ports:
+      - name: 8080-tcp
+        protocol: TCP
+        port: 8080
+        targetPort: 8080
+      - name: 5858-tcp
+        protocol: TCP
+        port: 5858
+        targetPort: 5858
+    selector:
+      app: demo-service
+      deploymentconfig: demo-service
+    sessionAffinity: None
+    type: ClusterIP
+- kind: Route
+  apiVersion: v1
+  metadata:
+    name: demo-service
+    namespace: helios
+    labels:
+      app: demo-service
+  spec:
+    to:
+      kind: Service
+      name: demo-service
+      weight: 100
+    port:
+      targetPort: 5858
+    tls:
+      termination: edge
+    wildcardPolicy: None
+- kind: ImageStream
+  apiVersion: v1
+  metadata:
+    name: demo-service
+    labels:
+      application: demo-service
+  spec:
+    tags:
+    - annotations: null
+      from:
+        kind: DockerImage
+        name: demo/demo-service:alpine
+      importPolicy:
+        insecure: true
+      name: demo-service
+      referencePolicy:
+        type: Local
